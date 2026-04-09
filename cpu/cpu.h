@@ -25,6 +25,7 @@ typedef struct {
 } CPU; 
 
 CPU *init_cpu();
+uint8_t cpu_fetch_instruction(CPU *cpu);
 void free_cpu(CPU *cpu);
 
 
