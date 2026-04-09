@@ -1,6 +1,6 @@
 IDIR=./cpu
 CC=gcc
-CFLAGS=-I$(IDIR) -Wall -Wextra
+CFLAGS=-I$(IDIR) -Wall -Wextra -g
 BUILD_DIR=build
 
 SRC=$(wildcard cpu/*.c) main.c
@@ -20,4 +20,6 @@ $(BUILD_DIR)/%.o: %.c
 clean:
 	rm -rf $(BUILD_DIR) $(dir $(TARGET))
 
-.PHONY: clean
+rebuild: clean all
+
+.PHONY: clean rebuild
