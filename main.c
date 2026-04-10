@@ -15,6 +15,14 @@ int main() {
     uint16_t addr = IND(cpu);
     printf("%x\n", addr);
 
+    uint8_t x = fetch_memory(cpu->mem, 0xFFFC);
+    uint8_t y = fetch_memory(cpu->mem, 0xFFFD);
+    printf("%x %x\n", x, y);
+
+    load_program(cpu->mem, "./6502_functional_test.bin");
+    cpu_reset(cpu);
+    printf("program counter: %x\n", cpu->pc);
+
     free_cpu(cpu);
 
     return 0;
