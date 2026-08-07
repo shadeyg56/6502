@@ -27,6 +27,7 @@ typedef struct {
 
 CPU *init_cpu();
 uint8_t cpu_fetch_instruction(CPU *cpu);
+void cpu_execute_instruction(CPU *cpu, uint8_t opcode);
 void cpu_reset(CPU *cpu);
 void free_cpu(CPU *cpu);
 void set_flag(CPU *cpu, uint8_t bitmask, bool cond);

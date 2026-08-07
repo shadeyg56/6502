@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <mem.h>
+#include <instructions.h>
 
 CPU *init_cpu() {
     CPU *cpu = malloc(sizeof(CPU));
@@ -26,8 +27,10 @@ uint8_t cpu_fetch_instruction(CPU *cpu) {
     return data;
 }
 
-void cpu_decode_instruction(CPU *cpu, uint8_t opcode) {
-    
+void cpu_execute_instruction(CPU *cpu, uint8_t opcode) {
+    Instruction instruction = INSTRUCTION_TABLE[opcode];
+    uint16_t addr = instruction.addr_mode(cpu);
+    instruction.op(cpu, addr);
 }
 
 void free_cpu(CPU *cpu) {
