@@ -5,6 +5,9 @@
 
 #define RAM_SIZE ((1 << 16) - 0x206)
 #define POWER_ON_RESET_LO 0xFFFC
+#define IRQ_VECTOR_LO 0xFFFE
+
+#define STACK_PAGE_START_ADDR 0x100
 
 typedef struct {
    uint8_t zp[0x100]; // 256 byte zero page
@@ -16,6 +19,7 @@ typedef struct {
 Memory *init_memory();
 int load_program(Memory *mem, char *filename);
 uint8_t fetch_memory(Memory *mem, uint16_t addr);
+int write_memory(Memory *mem, uint16_t addr,  uint8_t data);
 void clear_memory(Memory *mem);
 
 #endif

@@ -6,7 +6,7 @@
 
 typedef struct {
     uint8_t opcode;
-    void (*op)(CPU, uint8_t);
+    void (*op)(CPU, uint16_t);
     uint8_t (*addr_mode)(CPU);
 } Instruction;
 

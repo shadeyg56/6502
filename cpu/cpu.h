@@ -1,6 +1,7 @@
 #ifndef _CPU_H
 #define _CPU_H
 
+#include <stdbool.h>
 #include <mem.h>
 
 // CPU Status Flag bitmasks
@@ -28,6 +29,9 @@ CPU *init_cpu();
 uint8_t cpu_fetch_instruction(CPU *cpu);
 void cpu_reset(CPU *cpu);
 void free_cpu(CPU *cpu);
+void set_flag(CPU *cpu, uint8_t bitmask, bool cond);
+void set_zero_negative_flags(CPU *cpu, uint8_t value);
+void set_accum_flags_arith(CPU *cpu, uint8_t operand);
 
 
 #endif
