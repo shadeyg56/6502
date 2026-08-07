@@ -8,6 +8,13 @@ CPU *init_cpu() {
     CPU *cpu = malloc(sizeof(CPU));
     cpu->mem = init_memory();
 
+    cpu->pc = 0;
+    cpu->sp = 0xFF;
+    cpu->accum = 0;
+    cpu->X = 0;
+    cpu->Y = 0;
+    cpu->flags = 0;
+
     return cpu;
 }
 
@@ -18,7 +25,7 @@ void cpu_reset(CPU *cpu) {
     uint8_t start_addr_lo = fetch_memory(cpu->mem, POWER_ON_RESET_LO);
     uint8_t start_addr_hi = fetch_memory(cpu->mem, POWER_ON_RESET_LO+1);
     
-    uint16_t start_addr = start_addr_lo | (start_addr_hi << 8);
+    uint16_t start_addr = (start_addr_hi << 8) + start_addr_lo;
     cpu->pc = start_addr;
 }
 
@@ -29,7 +36,7 @@ uint8_t cpu_fetch_instruction(CPU *cpu) {
 
 void cpu_execute_instruction(CPU *cpu, uint8_t opcode) {
     Instruction instruction = INSTRUCTION_TABLE[opcode];
-    uint16_t addr = instruction.addr_mode(cpu);
+    uint16_t addr = instruction.addr_mode != NULL ? instruction.addr_mode(cpu) : 0;
     instruction.op(cpu, addr);
 }
 
@@ -38,16 +45,11 @@ void free_cpu(CPU *cpu) {
     free(cpu);
 }
 
-// void stack_push(CPU *cpu, uint8_t value) {
-//     uint16_t stack_start_addr = 0x100;
-
-// }
-
 void set_flag(CPU *cpu, uint8_t bitmask, bool cond) {
     if (cond) {
         cpu->flags |= bitmask;
     } else {
-        cpu->flags ^= bitmask;
+        cpu->flags &= ~bitmask;
     }
 }
 
@@ -64,7 +66,7 @@ void set_accum_flags_arith(CPU *cpu, uint8_t operand) {
     if (cpu->accum < operand || (carry_in && cpu->accum == operand)) {
             cpu->flags |= CPU_STATUS_CARRY;
     } else {
-        cpu->flags ^= CPU_STATUS_CARRY;
+        cpu->flags &= ~CPU_STATUS_CARRY;
     }
 
     set_zero_negative_flags(cpu, cpu->accum);
