@@ -6,9 +6,11 @@
 
 typedef struct {
     uint8_t opcode;
-    void (*op)(CPU, uint16_t);
-    uint8_t (*addr_mode)(CPU);
+    void (*op)(CPU *, uint16_t);
+    uint16_t (*addr_mode)(CPU *);
 } Instruction;
+
+extern const Instruction INSTRUCTION_TABLE[256];
 
 // CPU Addressing Modes
 uint16_t IMM(CPU *cpu);

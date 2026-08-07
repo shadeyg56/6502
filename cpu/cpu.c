@@ -26,7 +26,8 @@ uint8_t cpu_fetch_instruction(CPU *cpu) {
     return data;
 }
 
-void cpu_decode_instruction(CPU *cpu) {
+void cpu_decode_instruction(CPU *cpu, uint8_t opcode) {
+    
 }
 
 void free_cpu(CPU *cpu) {
