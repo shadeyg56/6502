@@ -41,6 +41,21 @@ int write_memory(Memory *mem, uint16_t addr,  uint8_t data) {
     return 0;
 }
 
+int dump_memory(Memory *mem, char *filename) {
+    FILE *bin = fopen(filename, "wb");
+
+    if (bin == NULL) {
+        return -1;
+    }
+
+    if (fwrite(mem, sizeof(*mem), 1, bin) != 1) {
+        return -1;
+    }
+
+    fclose(bin);
+    return 0;
+}
+
 int load_program(Memory *mem, char *filename) {
     FILE *bin = fopen(filename, "rb");
 

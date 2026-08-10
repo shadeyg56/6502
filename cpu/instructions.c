@@ -157,9 +157,9 @@ void BPL(CPU *cpu, uint16_t addr) {
 void BRK(CPU *cpu, uint16_t addr) {
     uint8_t pc_lo = cpu->pc & 0xFF;
     uint8_t pc_hi = (cpu->pc >> 8) & 0xFF;
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, pc_lo);    
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, pc_hi);    
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, cpu->flags);    
+    stack_push(cpu, pc_hi);
+    stack_push(cpu, pc_lo);
+    stack_push(cpu, cpu->flags);
 
     uint8_t irq_pc_lo = fetch_memory(cpu->mem, IRQ_VECTOR_LO);
     uint8_t irq_pc_hi = fetch_memory(cpu->mem, IRQ_VECTOR_LO+1);
@@ -290,10 +290,10 @@ void JMP(CPU *cpu, uint16_t addr) {
 
 // Jump to Subroutine
 void JSR(CPU *cpu, uint16_t addr) {
-    uint8_t pc_lo = cpu->pc-1 & 0xFF;
-    uint8_t pc_hi = (cpu->pc-1 >> 8) & 0xFF;
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, pc_lo);    
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, pc_hi);
+    uint8_t pc_lo = (cpu->pc-1) & 0xFF;
+    uint8_t pc_hi = ((cpu->pc-1) >> 8) & 0xFF;
+    stack_push(cpu, pc_hi);
+    stack_push(cpu, pc_lo);
 
     cpu->pc = addr;
 
@@ -347,24 +347,24 @@ void ORA(CPU *cpu, uint16_t addr) {
 
 // Push Accumulator
 void PHA(CPU *cpu, uint16_t addr) {
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, cpu->accum);
+    stack_push(cpu, cpu->accum);
 }
 
 // Push Processor State
 void PHP(CPU *cpu, uint16_t addr) {
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, cpu->flags);
+    stack_push(cpu, cpu->flags);
 }
 
 // Pull Accumulator
 void PLA(CPU *cpu, uint16_t addr) {
-    uint8_t value = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--);
+    uint8_t value = stack_pull(cpu);
     cpu->accum = value;
     set_zero_negative_flags(cpu, cpu->accum);
 }
 
 // Pull Processor State
 void PLP(CPU *cpu, uint16_t addr) {
-    uint8_t value = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--);
+    uint8_t value = stack_pull(cpu);
     cpu->flags = value;
 }
 
@@ -394,9 +394,9 @@ void ROR(CPU *cpu, uint16_t addr) {
 
 // Return from Interrupt
 void RTI(CPU *cpu, uint16_t addr) {
-   uint8_t flags = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--); 
-   uint8_t pc_hi = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--);
-   uint8_t pc_lo = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--);
+   uint8_t flags = stack_pull(cpu);
+   uint8_t pc_lo = stack_pull(cpu);
+   uint8_t pc_hi = stack_pull(cpu);
 
    cpu->flags = flags;
    cpu->pc = (pc_hi << 8) + pc_lo;
@@ -404,10 +404,11 @@ void RTI(CPU *cpu, uint16_t addr) {
 
 // Return from Subroutine
 void RTS(CPU *cpu, uint16_t addr) {
-   uint8_t pc_hi = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--);
-   uint8_t pc_lo = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp--);
+   uint8_t pc_lo = stack_pull(cpu);
+   uint8_t pc_hi = stack_pull(cpu);
 
-   cpu->pc = (pc_hi << 8) + pc_lo; 
+   /* JSR pushed the address of its last operand byte, so step past it. */
+   cpu->pc = ((pc_hi << 8) + pc_lo) + 1;
 }
 
 // Subtract with Carry
@@ -464,7 +465,7 @@ void TAY(CPU *cpu, uint16_t addr) {
 
 // Transfer SP to X
 void TSX(CPU *cpu, uint16_t addr) {
-    cpu->X = fetch_memory(cpu->mem, STACK_PAGE_START_ADDR-cpu->sp--);
+    cpu->X = cpu->sp;
     set_zero_negative_flags(cpu, cpu->X);
 }
 
@@ -476,7 +477,8 @@ void TXA(CPU *cpu, uint16_t addr) {
 
 // Transfer X to SP
 void TXS(CPU *cpu, uint16_t addr) {
-    write_memory(cpu->mem, STACK_PAGE_START_ADDR+cpu->sp++, cpu->X);
+    // TXS is the only transfer that does not touch the status flags
+    cpu->sp = cpu->X;
 }
 
 // Transfer Y to Accumulator

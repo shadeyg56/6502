@@ -45,6 +45,16 @@ void free_cpu(CPU *cpu) {
     free(cpu);
 }
 
+void stack_push(CPU *cpu, uint8_t value) {
+    write_memory(cpu->mem, STACK_PAGE_START_ADDR + cpu->sp, value);
+    cpu->sp--;
+}
+
+uint8_t stack_pull(CPU *cpu) {
+    cpu->sp++;
+    return fetch_memory(cpu->mem, STACK_PAGE_START_ADDR + cpu->sp);
+}
+
 void set_flag(CPU *cpu, uint8_t bitmask, bool cond) {
     if (cond) {
         cpu->flags |= bitmask;

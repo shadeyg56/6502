@@ -21,5 +21,6 @@ int load_program(Memory *mem, char *filename);
 uint8_t fetch_memory(Memory *mem, uint16_t addr);
 int write_memory(Memory *mem, uint16_t addr,  uint8_t data);
 void clear_memory(Memory *mem);
+int dump_memory(Memory *mem, char *filename);
 
 #endif

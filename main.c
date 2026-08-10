@@ -15,6 +15,7 @@ int main() {
         uint16_t prev_pc = cpu->pc;
 
         uint8_t opcode = cpu_fetch_instruction(cpu);
+        printf("Executing %02x\n", opcode);
         cpu_execute_instruction(cpu, opcode);
 
         if (cpu->pc == prev_pc) {
@@ -23,6 +24,7 @@ int main() {
             } else {
                 printf("FAIL: trap at $%04X, test #%d\n",
                        cpu->pc, fetch_memory(cpu->mem, 0x0200));
+                dump_memory(cpu->mem, "failure-mem-dump.bin");
             }
             break;
         }

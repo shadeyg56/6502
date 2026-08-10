@@ -30,6 +30,8 @@ uint8_t cpu_fetch_instruction(CPU *cpu);
 void cpu_execute_instruction(CPU *cpu, uint8_t opcode);
 void cpu_reset(CPU *cpu);
 void free_cpu(CPU *cpu);
+void stack_push(CPU *cpu, uint8_t value);
+uint8_t stack_pull(CPU *cpu);
 void set_flag(CPU *cpu, uint8_t bitmask, bool cond);
 void set_zero_negative_flags(CPU *cpu, uint8_t value);
 void set_accum_flags_arith(CPU *cpu, uint8_t operand);
