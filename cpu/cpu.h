@@ -10,6 +10,7 @@
 #define CPU_STATUS_INTERRUPT (1 << 2)
 #define CPU_STATUS_DECIMAL (1 << 3)
 #define CPU_STATUS_BREAK (1 << 4)
+#define CPU_STATUS_UNUSED (1 << 5)
 #define CPU_STATUS_OVERFLOW (1 << 6)
 #define CPU_STATUS_NEGATIVE (1 << 7)
 
@@ -34,7 +35,7 @@ void stack_push(CPU *cpu, uint8_t value);
 uint8_t stack_pull(CPU *cpu);
 void set_flag(CPU *cpu, uint8_t bitmask, bool cond);
 void set_zero_negative_flags(CPU *cpu, uint8_t value);
-void set_accum_flags_arith(CPU *cpu, uint8_t operand);
+void set_accum_flags_arith(CPU *cpu, uint8_t operand, uint8_t accum_prev);
 
 
 #endif

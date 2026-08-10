@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <cpu.h>
+#include "util.h"
 
 typedef struct {
     uint8_t opcode;

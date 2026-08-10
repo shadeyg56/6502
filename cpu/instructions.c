@@ -51,7 +51,7 @@ uint16_t IND(CPU *cpu) {
     uint8_t hi_ind = cpu_fetch_instruction(cpu);
 
 
-    uint16_t addr_ind = (lo_ind << 8) | hi_ind;
+    uint16_t addr_ind = (hi_ind << 8) | lo_ind;
     uint8_t lo_real = fetch_memory(cpu->mem, addr_ind);
     uint8_t hi_real = fetch_memory(cpu->mem, addr_ind+1);
     return (hi_real << 8) | lo_real;
@@ -59,18 +59,22 @@ uint16_t IND(CPU *cpu) {
 
 uint16_t INDX(CPU *cpu) {
     uint8_t lo_ind = cpu_fetch_instruction(cpu) + cpu->X;
+    uint8_t hi_ind = lo_ind+1;
 
     uint8_t lo_real = fetch_memory(cpu->mem, lo_ind);
+    uint8_t hi_real = fetch_memory(cpu->mem, hi_ind);
     
-    return lo_real;
+    return (hi_real << 8 | lo_real);
 }
 
 uint16_t INDY(CPU *cpu) {
-    uint8_t lo_ind = cpu_fetch_instruction(cpu) + cpu->X;
+    uint8_t lo_ind = cpu_fetch_instruction(cpu);
+    uint8_t hi_ind = lo_ind+1;
 
     uint8_t lo_real = fetch_memory(cpu->mem, lo_ind);
+    uint8_t hi_real = fetch_memory(cpu->mem, hi_ind);
     
-    return lo_real;
+    return (hi_real << 8 | lo_real) + cpu->Y;
 }
 
 /* CPU Instructions */
@@ -78,9 +82,28 @@ uint16_t INDY(CPU *cpu) {
 void ADC(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
     uint8_t carry_in = cpu->flags & CPU_STATUS_CARRY;
-    cpu->accum += value + carry_in;
-    
-    set_accum_flags_arith(cpu, value);
+    uint8_t accum_prev = cpu->accum;
+    uint8_t result_bin = accum_prev + value + carry_in;
+
+    if (!(cpu->flags & CPU_STATUS_DECIMAL)) {
+        cpu->accum = result_bin;
+        set_accum_flags_arith(cpu, value, accum_prev);
+    } else {
+        uint8_t decimal_carry = carry_in;
+        uint16_t lo = (accum_prev & 0x0F) + (value & 0x0F) + carry_in;
+        if (lo >= 0x0A) {
+            lo = ((lo + 0x06) & 0x0F) + 0x10;
+        }
+        uint8_t intermediate = (accum_prev & 0xF0) + (value & 0xF0) + lo;
+
+        cpu->accum = bcd_add(accum_prev, value, &decimal_carry);
+
+        set_flag(cpu, CPU_STATUS_CARRY, decimal_carry);
+        set_flag(cpu, CPU_STATUS_OVERFLOW,
+                 (accum_prev ^ intermediate) & ~(accum_prev ^ value) & (1 << 7));
+        set_flag(cpu, CPU_STATUS_NEGATIVE, intermediate & (1 << 7));
+        set_flag(cpu, CPU_STATUS_ZERO, result_bin == 0);
+    }
 }
 
 void AND(CPU *cpu, uint16_t addr) {
@@ -93,14 +116,19 @@ void AND(CPU *cpu, uint16_t addr) {
 void ASL(CPU *cpu, uint16_t addr) {
     uint8_t old_value = fetch_memory(cpu->mem, addr);
     uint8_t new_value = old_value * 2;
+    write_memory(cpu->mem, addr, new_value);
 
-    if (old_value & (1 << 7)) {
-        cpu->flags |= CPU_STATUS_CARRY;
-    } else {
-        cpu->flags ^= CPU_STATUS_CARRY;
-    }
+    set_flag(cpu, CPU_STATUS_CARRY, (old_value & (1 << 7)));
+    set_zero_negative_flags(cpu, new_value);
+}
 
-    // Fix flags, add accum mode
+void ASL_Accum (CPU *cpu, uint16_t addr) {
+    uint8_t old_accum = cpu->accum;
+    cpu->accum *= 2;
+
+    set_flag(cpu, CPU_STATUS_CARRY, (old_accum & (1 << 7)));
+
+    set_zero_negative_flags(cpu, cpu->accum); 
 }
 
 // Branch if Carry Clear
@@ -129,7 +157,8 @@ void BIT(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
     uint8_t result = value & cpu->accum;
     set_zero_negative_flags(cpu, result);
-    set_flag(cpu, CPU_STATUS_OVERFLOW, (result & (1 << 6)));
+    set_flag(cpu, CPU_STATUS_OVERFLOW, (value & (1 << 6)));
+    set_flag(cpu, CPU_STATUS_NEGATIVE, (value & (1 << 7)));
 }
 
 // Branch if Minus
@@ -155,17 +184,17 @@ void BPL(CPU *cpu, uint16_t addr) {
 
 // Force Interrupt
 void BRK(CPU *cpu, uint16_t addr) {
-    uint8_t pc_lo = cpu->pc & 0xFF;
-    uint8_t pc_hi = (cpu->pc >> 8) & 0xFF;
+    uint8_t pc_lo = (cpu->pc+1) & 0xFF;
+    uint8_t pc_hi = ((cpu->pc+1) >> 8) & 0xFF;
     stack_push(cpu, pc_hi);
     stack_push(cpu, pc_lo);
-    stack_push(cpu, cpu->flags);
+    stack_push(cpu, cpu->flags | CPU_STATUS_BREAK | CPU_STATUS_UNUSED);
 
     uint8_t irq_pc_lo = fetch_memory(cpu->mem, IRQ_VECTOR_LO);
     uint8_t irq_pc_hi = fetch_memory(cpu->mem, IRQ_VECTOR_LO+1);
     cpu->pc = (irq_pc_hi << 8) + irq_pc_lo;
 
-    set_flag(cpu, CPU_STATUS_BREAK, 1);
+    set_flag(cpu, CPU_STATUS_INTERRUPT, 1);
 }
 
 // Branch if Overflow Clear
@@ -202,6 +231,7 @@ void CLV(CPU *cpu, uint16_t addr) {
 // Compare
 void CMP(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
+   //printf("Comparing %d accum to %d\n", cpu->accum, value);
     set_flag(cpu, CPU_STATUS_CARRY, (cpu->accum >= value));
     set_zero_negative_flags(cpu, cpu->accum - value);
 }
@@ -327,9 +357,18 @@ void LDY(CPU *cpu, uint16_t addr) {
 void LSR(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
     uint8_t value_shift = value >> 1;
+    write_memory(cpu->mem, addr, value_shift);
 
     set_flag(cpu, CPU_STATUS_CARRY, (value & 1));
     set_zero_negative_flags(cpu, value_shift);
+}
+
+void LSR_Accum(CPU *cpu, uint16_t addr) {
+    uint16_t accum_prev = cpu->accum;
+    cpu->accum >>= 1;
+
+    set_flag(cpu, CPU_STATUS_CARRY, (accum_prev & 1));
+    set_zero_negative_flags(cpu, cpu->accum);
 }
 
 // No Operation
@@ -352,7 +391,9 @@ void PHA(CPU *cpu, uint16_t addr) {
 
 // Push Processor State
 void PHP(CPU *cpu, uint16_t addr) {
-    stack_push(cpu, cpu->flags);
+    // Functional test expects break and reserved flags to be set
+    // Might reassemble test at some point to disable this
+    stack_push(cpu, cpu->flags | CPU_STATUS_BREAK | CPU_STATUS_UNUSED);
 }
 
 // Pull Accumulator
@@ -380,6 +421,16 @@ void ROL(CPU *cpu, uint16_t addr) {
     set_zero_negative_flags(cpu, new_value);
 }
 
+void ROL_Accum(CPU *cpu, uint16_t addr) {
+    uint8_t prev_accum = cpu->accum;
+    cpu->accum <<= 1;
+
+    cpu->accum |= (cpu->flags & CPU_STATUS_CARRY);
+
+    set_flag(cpu, CPU_STATUS_CARRY, (prev_accum & (1 << 7)));
+    set_zero_negative_flags(cpu, cpu->accum);
+}
+
 // Rotate right
 void ROR(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
@@ -390,6 +441,17 @@ void ROR(CPU *cpu, uint16_t addr) {
 
     set_flag(cpu, CPU_STATUS_CARRY, (value & 1));
     set_zero_negative_flags(cpu, new_value);
+}
+
+
+void ROR_Accum(CPU *cpu, uint16_t addr) {
+    uint8_t prev_accum = cpu->accum;
+    cpu->accum >>= 1;
+
+    cpu->accum |= (cpu->flags & CPU_STATUS_CARRY) << 7;
+
+    set_flag(cpu, CPU_STATUS_CARRY, (prev_accum & 1));
+    set_zero_negative_flags(cpu, cpu->accum);
 }
 
 // Return from Interrupt
@@ -415,10 +477,33 @@ void RTS(CPU *cpu, uint16_t addr) {
 void SBC(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
     uint8_t carry_in = cpu->flags & CPU_STATUS_CARRY;
+    uint8_t accum_prev = cpu->accum;
+    uint8_t borrow = 1 - carry_in;
+    uint8_t result_bin = accum_prev - value - borrow;
 
-    cpu->accum -= value - (1-carry_in);
+    if (!(cpu->flags & CPU_STATUS_DECIMAL)) {
+        cpu->accum = result_bin;
+    } else {
+        uint8_t bcd_borrow = borrow;
+        cpu->accum = bcd_subtract(accum_prev, value, &bcd_borrow);
+    }
 
-    set_accum_flags_arith(cpu, value);
+    if (borrow ? (accum_prev > value) : (accum_prev >= value)) {
+        cpu->flags |= CPU_STATUS_CARRY;
+    } else {
+        cpu->flags &= ~CPU_STATUS_CARRY;
+    }
+
+    if ((result_bin ^ ~value) & (accum_prev ^ result_bin) & (1 << 7)) {
+        cpu->flags |= CPU_STATUS_OVERFLOW;
+    } else {
+        cpu->flags &= ~CPU_STATUS_OVERFLOW;
+    }
+
+    set_zero_negative_flags(cpu, result_bin);
+
+    //printf("Flags: %02x\n", cpu->flags);
+
 }
 
 // Set Carry Flag
@@ -499,7 +584,7 @@ const Instruction INSTRUCTION_TABLE[256] = {
     { 0x07, NOP, NULL },
     { 0x08, PHP, NULL },
     { 0x09, ORA, IMM },
-    { 0x0A, NOP, NULL }, /* Accumulator op */
+    { 0x0A, ASL_Accum, NULL }, /* Accumulator op */
     { 0x0B, NOP, NULL },
     { 0x0C, NOP, NULL },
     { 0x0D, ORA, ABS },
@@ -531,7 +616,7 @@ const Instruction INSTRUCTION_TABLE[256] = {
     { 0x27, NOP, NULL },
     { 0x28, PLP, NULL },
     { 0x29, AND, IMM },
-    { 0x2A, NOP, NULL }, /* Accumulator op */
+    { 0x2A, ROL_Accum, NULL }, /* Accumulator op */
     { 0x2B, NOP, NULL },
     { 0x2C, BIT, ABS },
     { 0x2D, AND, ABS },
@@ -563,7 +648,7 @@ const Instruction INSTRUCTION_TABLE[256] = {
     { 0x47, NOP, NULL },
     { 0x48, PHA, NULL },
     { 0x49, EOR, IMM },
-    { 0x4A, NOP, NULL }, /* Accumulator op */
+    { 0x4A, LSR_Accum, NULL }, /* Accumulator op */
     { 0x4B, NOP, NULL },
     { 0x4C, JMP, ABS },
     { 0x4D, EOR, ABS },
@@ -595,7 +680,7 @@ const Instruction INSTRUCTION_TABLE[256] = {
     { 0x67, NOP, NULL },
     { 0x68, PLA, NULL },
     { 0x69, ADC, IMM },
-    { 0x6A, NOP, NULL }, /* Accumulator op */
+    { 0x6A, ROR_Accum, NULL }, /* Accumulator op */
     { 0x6B, NOP, NULL },
     { 0x6C, JMP, IND },
     { 0x6D, ADC, ABS },

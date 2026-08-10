@@ -71,7 +71,7 @@ void set_zero_negative_flags(CPU *cpu, uint8_t value) {
     set_flag(cpu, CPU_STATUS_NEGATIVE, (value & (1 << 7)));
 }
 
-void set_accum_flags_arith(CPU *cpu, uint8_t operand) {
+void set_accum_flags_arith(CPU *cpu, uint8_t operand, uint8_t accum_prev) {
     uint8_t carry_in = cpu->flags & CPU_STATUS_CARRY;
     if (cpu->accum < operand || (carry_in && cpu->accum == operand)) {
             cpu->flags |= CPU_STATUS_CARRY;
@@ -79,7 +79,12 @@ void set_accum_flags_arith(CPU *cpu, uint8_t operand) {
         cpu->flags &= ~CPU_STATUS_CARRY;
     }
 
+    if (~(accum_prev ^ operand) & (accum_prev ^ cpu->accum) & (1 << 7)) {
+        cpu->flags |= CPU_STATUS_OVERFLOW;
+    } else {
+        cpu->flags &= ~CPU_STATUS_OVERFLOW;
+    }
+
     set_zero_negative_flags(cpu, cpu->accum);
 
-    // TODO: Overflow flag
 }
