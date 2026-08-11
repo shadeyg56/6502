@@ -22,5 +22,6 @@ uint8_t fetch_memory(Memory *mem, uint16_t addr);
 int write_memory(Memory *mem, uint16_t addr,  uint8_t data);
 void clear_memory(Memory *mem);
 int dump_memory(Memory *mem, char *filename);
+int mem_read_range(Memory *mem, uint16_t addr, uint16_t range, uint8_t *buf);
 
 #endif

@@ -36,6 +36,6 @@ uint8_t stack_pull(CPU *cpu);
 void set_flag(CPU *cpu, uint8_t bitmask, bool cond);
 void set_zero_negative_flags(CPU *cpu, uint8_t value);
 void set_accum_flags_arith(CPU *cpu, uint8_t operand, uint8_t accum_prev);
-
+int cpu_run_count(CPU *cpu, uint64_t count);
 
 #endif

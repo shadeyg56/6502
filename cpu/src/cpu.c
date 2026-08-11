@@ -40,6 +40,15 @@ void cpu_execute_instruction(CPU *cpu, uint8_t opcode) {
     instruction.op(cpu, addr);
 }
 
+int cpu_run_count(CPU *cpu, uint64_t count) {
+    for (int i = 0; i < count; i++) {
+        uint8_t opcode = cpu_fetch_instruction(cpu);
+        cpu_execute_instruction(cpu, opcode);
+    }
+
+    return count;
+}
+
 void free_cpu(CPU *cpu) {
     free(cpu->mem);
     free(cpu);

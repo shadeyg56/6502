@@ -89,6 +89,21 @@ int load_program(Memory *mem, char *filename) {
     return 0;
 }
 
+/**
+ * Read a range of memory into provided buffer
+ * Read will be bounded if the read would overflow
+ * Returns number of bytes read
+ */
+int mem_read_range(Memory *mem, uint16_t addr, uint16_t range, uint8_t *buf) {
+    if ((size_t)(addr+range) > sizeof(*mem)) {
+        range = sizeof(*mem) - addr;
+    }
+    for (int i = 0; i < range; i++) {
+        buf[i] = fetch_memory(mem, addr + i);
+    }
+    return range;
+}
+
 void clear_memory(Memory *mem) {
     memset(mem->zp, 0, sizeof(mem->zp));
     memset(mem->stack, 0, sizeof(mem->stack));

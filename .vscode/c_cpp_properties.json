@@ -1,0 +1,14 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Linux",
+            "compilerPath": "/usr/bin/gcc",
+            "includePath": [
+                "${workspaceFolder}/cpu/src"
+            ],
+            "cStandard": "c23",
+            "intelliSenseMode": "linux-gcc-arm64"
+        }
+    ]
+}
