@@ -231,7 +231,6 @@ void CLV(CPU *cpu, uint16_t addr) {
 // Compare
 void CMP(CPU *cpu, uint16_t addr) {
     uint8_t value = fetch_memory(cpu->mem, addr);
-   //printf("Comparing %d accum to %d\n", cpu->accum, value);
     set_flag(cpu, CPU_STATUS_CARRY, (cpu->accum >= value));
     set_zero_negative_flags(cpu, cpu->accum - value);
 }
@@ -501,8 +500,6 @@ void SBC(CPU *cpu, uint16_t addr) {
     }
 
     set_zero_negative_flags(cpu, result_bin);
-
-    //printf("Flags: %02x\n", cpu->flags);
 
 }
 
