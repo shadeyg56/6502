@@ -1,9 +1,9 @@
-IDIR=./cpu
+IDIR=./src
 CC=gcc
 CFLAGS=-I$(IDIR) -Wall -Wextra -g
 BUILD_DIR=build
 
-SRC=$(wildcard cpu/*.c) main.c
+SRC=$(wildcard src/*.c) main.c
 OBJ=$(SRC:%.c=$(BUILD_DIR)/%.o)
 TARGET=./bin/6502
 
