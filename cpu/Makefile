@@ -12,6 +12,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	mkdir -p $(dir $@)
 	$(CC) -o $@ $^
+	$(CC) -shared -o $(dir $@)/lib6502.so $^
 
 $(BUILD_DIR)/%.o: %.c
 	mkdir -p $(dir $@)
