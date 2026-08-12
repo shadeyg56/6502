@@ -7,11 +7,14 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type model struct {
 	snapshotChan chan CPUSnapshot
 	snapshot     CPUSnapshot
+	width        int
+	height       int
 }
 
 type KeyMap struct {
@@ -44,12 +47,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case CPUSnapshot:
 		m.snapshot = msg
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 	}
 
 	return m, nil
 }
 
-// flagString renders the P register as NV-BDIZC, with a dot for each clear bit.
 func flagString(flags uint8) string {
 	const names = "NV-BDIZC"
 
@@ -65,26 +71,63 @@ func flagString(flags uint8) string {
 	return string(out)
 }
 
-func (m model) View() tea.View {
-
+func (m model) cpuStatusBody() string {
 	if m.snapshot.mem == nil {
-		return tea.NewView("waiting for first snapshot...")
+		return "waiting for first snapshot..."
 	}
 
 	s := m.snapshot
-	body := fmt.Sprintf(
-		"6502\n\n"+
-			"PC  $%04X\n"+
+	return fmt.Sprintf(
+		"PC  $%04X\n"+
 			"SP  $%02X\n"+
 			"A   $%02X\n"+
 			"X   $%02X\n"+
 			"Y   $%02X\n"+
-			"P   $%02X  %s\n\n"+
-			"ctrl+c quit\n",
+			"P   $%02X  %s",
 		s.pc, s.sp, s.accum, s.X, s.Y, s.flags, flagString(s.flags),
 	)
+}
 
-	return tea.NewView(body)
+func (m model) memoryViewBody(lines int) string {
+	if m.snapshot.mem == nil {
+		return "waiting for first snapshot..."
+	}
+
+	s := m.snapshot
+	byte_lines := make([]string, lines)
+	header_line := "     "
+	for i := range 16 {
+		header_line += fmt.Sprintf("  %02X ", i)
+	}
+
+	for i := range lines {
+		byte_lines[i] += fmt.Sprintf("%04X ", i*16)
+		for j := range 16 {
+			byte_lines[i] += fmt.Sprintf("  %02X ", s.mem[j])
+		}
+
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Top, append([]string{header_line}, byte_lines...)...)
+}
+
+func (m model) View() tea.View {
+	view := tea.NewView("")
+	view.AltScreen = true
+
+	if m.width == 0 || m.height == 0 {
+		view.Content = "initializing..."
+		return view
+	}
+
+	leftWidth := m.width / 4
+	rightWidth := m.width - leftWidth
+
+	cpuTile := tile(leftWidth, m.height/2, "CPU Status", m.cpuStatusBody())
+	memTile := tile(rightWidth, m.height, "Memory", m.memoryViewBody(5))
+
+	view.Content = joinTiles(cpuTile, memTile)
+	return view
 }
 
 func StartLogger() *os.File {

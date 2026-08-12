@@ -1,0 +1,30 @@
+package main
+
+import "charm.land/lipgloss/v2"
+
+var (
+	tileStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(0, 1)
+
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("63"))
+)
+
+func tile(outerWidth, outerHeight int, title, body string) string {
+	width := max(outerWidth, 4)
+	height := max(outerHeight, 3)
+
+	content := titleStyle.Render(title)
+	if body != "" {
+		content += "\n\n" + body
+	}
+
+	return tileStyle.Width(width).Height(height).Render(content)
+}
+
+func joinTiles(tiles ...string) string {
+	return lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
+}
