@@ -15,27 +15,33 @@ import (
 const RefreshInterval = 16 * time.Millisecond
 
 type model struct {
-	snapshots *atomic.Pointer[CPUSnapshot]
-	snapshot  CPUSnapshot
-	width     int
-	height    int
+	snapshots       *atomic.Pointer[CPUSnapshot]
+	snapshot        CPUSnapshot
+	emu_cmd_channel chan EmuCMD
+	width           int
+	height          int
 }
 
 type tickMsg time.Time
 
 type KeyMap struct {
 	CtrlC key.Binding
+	Plus  key.Binding
 }
 
 var DefaultKeyMap = KeyMap{
 	CtrlC: key.NewBinding(
 		key.WithKeys("ctrl+c"),
 	),
+	Plus: key.NewBinding(
+		key.WithKeys("enter"),
+	),
 }
 
 func initialModel() model {
 	return model{
-		snapshots: &atomic.Pointer[CPUSnapshot]{},
+		snapshots:       &atomic.Pointer[CPUSnapshot]{},
+		emu_cmd_channel: make(chan EmuCMD),
 	}
 }
 
@@ -56,6 +62,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, DefaultKeyMap.CtrlC):
 			return m, tea.Quit
+		case key.Matches(msg, DefaultKeyMap.Plus):
+			m.emu_cmd_channel <- StepEmulator{}
+			return m, nil
 		}
 	case tickMsg:
 		if latest := m.snapshots.Load(); latest != nil {
@@ -162,7 +171,7 @@ func main() {
 
 	log.Println("Starting 6502 TUI application...")
 
-	go RunEmulator(m.snapshots)
+	go RunEmulator(m.snapshots, m.emu_cmd_channel)
 
 	program.Run()
 }
