@@ -30,8 +30,6 @@ type CPUSnapshot struct {
 	flags uint8
 }
 
-// Fill needs a pointer receiver: with a value receiver every register
-// assignment below lands on a copy and is discarded.
 func (snapshot *CPUSnapshot) Fill(handle CPUHandle) {
 
 	cpu := handle.cpu

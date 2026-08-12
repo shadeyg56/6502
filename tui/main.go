@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -15,33 +14,21 @@ import (
 const RefreshInterval = 16 * time.Millisecond
 
 type model struct {
-	snapshots       *atomic.Pointer[CPUSnapshot]
-	snapshot        CPUSnapshot
-	emu_cmd_channel chan EmuCMD
-	width           int
-	height          int
+	snapshots         *atomic.Pointer[CPUSnapshot]
+	snapshot          CPUSnapshot
+	emu_cmd_channel   chan EmuCMD
+	width             int
+	height            int
+	emulatorIsPlaying bool
 }
 
 type tickMsg time.Time
 
-type KeyMap struct {
-	CtrlC key.Binding
-	Plus  key.Binding
-}
-
-var DefaultKeyMap = KeyMap{
-	CtrlC: key.NewBinding(
-		key.WithKeys("ctrl+c"),
-	),
-	Plus: key.NewBinding(
-		key.WithKeys("enter"),
-	),
-}
-
 func initialModel() model {
 	return model{
-		snapshots:       &atomic.Pointer[CPUSnapshot]{},
-		emu_cmd_channel: make(chan EmuCMD),
+		snapshots:         &atomic.Pointer[CPUSnapshot]{},
+		emu_cmd_channel:   make(chan EmuCMD),
+		emulatorIsPlaying: false,
 	}
 }
 
@@ -59,12 +46,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch {
-		case key.Matches(msg, DefaultKeyMap.CtrlC):
+		switch DefaultKeyMap.Action(msg) {
+		case ActionQuit:
 			return m, tea.Quit
-		case key.Matches(msg, DefaultKeyMap.Plus):
-			m.emu_cmd_channel <- StepEmulator{}
-			return m, nil
+		case ActionStep:
+			return m, sendEmuCmd(m.emu_cmd_channel, StepEmulator{1})
+		case ActionTogglePlay:
+			if m.emulatorIsPlaying {
+				m.emulatorIsPlaying = false
+				return m, sendEmuCmd(m.emu_cmd_channel, StopEmulator{})
+			}
+			m.emulatorIsPlaying = true
+			return m, sendEmuCmd(m.emu_cmd_channel, PlayEmulator{})
 		}
 	case tickMsg:
 		if latest := m.snapshots.Load(); latest != nil {
@@ -171,7 +164,7 @@ func main() {
 
 	log.Println("Starting 6502 TUI application...")
 
-	go RunEmulator(m.snapshots, m.emu_cmd_channel)
+	go EmulatorHandler(m.snapshots, m.emu_cmd_channel)
 
 	program.Run()
 }
