@@ -4,18 +4,24 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync/atomic"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
+const RefreshInterval = 16 * time.Millisecond
+
 type model struct {
-	snapshotChan chan CPUSnapshot
-	snapshot     CPUSnapshot
-	width        int
-	height       int
+	snapshots *atomic.Pointer[CPUSnapshot]
+	snapshot  CPUSnapshot
+	width     int
+	height    int
 }
+
+type tickMsg time.Time
 
 type KeyMap struct {
 	CtrlC key.Binding
@@ -29,12 +35,18 @@ var DefaultKeyMap = KeyMap{
 
 func initialModel() model {
 	return model{
-		snapshotChan: make(chan CPUSnapshot),
+		snapshots: &atomic.Pointer[CPUSnapshot]{},
 	}
 }
 
+func tick() tea.Cmd {
+	return tea.Tick(RefreshInterval, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
 func (m model) Init() tea.Cmd {
-	return nil
+	return tick()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -45,8 +57,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, DefaultKeyMap.CtrlC):
 			return m, tea.Quit
 		}
-	case CPUSnapshot:
-		m.snapshot = msg
+	case tickMsg:
+		if latest := m.snapshots.Load(); latest != nil {
+			m.snapshot = *latest
+		}
+		return m, tick()
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -103,7 +118,7 @@ func (m model) memoryViewBody(lines int) string {
 	for i := range lines {
 		byte_lines[i] += fmt.Sprintf("%04X ", i*16)
 		for j := range 16 {
-			byte_lines[i] += fmt.Sprintf("  %02X ", s.mem[j])
+			byte_lines[i] += fmt.Sprintf("  %02X ", s.mem[(i*16)+j])
 		}
 
 	}
@@ -147,13 +162,7 @@ func main() {
 
 	log.Println("Starting 6502 TUI application...")
 
-	go RunEmulator(m.snapshotChan)
-
-	go func() {
-		for snapshot := range m.snapshotChan {
-			program.Send(snapshot)
-		}
-	}()
+	go RunEmulator(m.snapshots)
 
 	program.Run()
 }
