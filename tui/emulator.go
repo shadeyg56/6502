@@ -76,8 +76,8 @@ func EmulatorHandler(snapshot_pointer *atomic.Pointer[CPUSnapshot], emu_chan cha
 	}
 
 	cpuHandle := NewCPU()
-	cpuHandle.LoadProgram("../cpu/6502_functional_test.bin")
-	cpuHandle.cpu.pc = 0x0400
+	//cpuHandle.LoadProgram("../cpu/6502_functional_test.bin")
+	//cpuHandle.cpu.pc = 0x0400
 	defer cpuHandle.Free()
 	emuState.ctx, emuState.cancel = context.WithCancel(context.Background())
 	defer emuState.cancel()

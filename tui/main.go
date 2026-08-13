@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -34,7 +35,7 @@ type model struct {
 
 type tickMsg time.Time
 
-func initialModel() model {
+func initialModel(initialProgram string) model {
 
 	fp := filepicker.New()
 	fp.AllowedTypes = []string{".bin"}
@@ -42,12 +43,16 @@ func initialModel() model {
 	if err == nil {
 		fp.CurrentDirectory = cwd
 	}
+	if initialProgram != "" {
+		initialProgram, _ = filepath.Abs(initialProgram)
+	}
 	return model{
 		snapshots:         &atomic.Pointer[CPUSnapshot]{},
 		emu_cmd_channel:   make(chan EmuCMD),
 		emulatorIsPlaying: false,
 		help:              help.New(),
 		filePicker:        fp,
+		programPath:       initialProgram,
 	}
 }
 
@@ -58,7 +63,14 @@ func tick() tea.Cmd {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(tick(), m.filePicker.Init())
+
+	cmds := []tea.Cmd{tick(), m.filePicker.Init()}
+
+	if m.programPath != "" {
+		cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, LoadProgram{m.programPath}))
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -254,7 +266,13 @@ func StartLogger() *os.File {
 }
 
 func main() {
-	m := initialModel()
+
+	programPath := ""
+	if len(os.Args) >= 2 {
+		programPath = os.Args[1]
+	}
+
+	m := initialModel(programPath)
 	program := tea.NewProgram(m)
 	log_file := StartLogger()
 	defer log_file.Close()
