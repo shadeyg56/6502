@@ -33,3 +33,11 @@ func tile(outerWidth, outerHeight int, title, body string) string {
 func joinTiles(tiles ...string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
 }
+
+func stackSections(sections ...string) string {
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func heightOf(s string) int {
+	return lipgloss.Height(s)
+}

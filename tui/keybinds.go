@@ -12,24 +12,50 @@ const (
 	ActionQuit
 	ActionStep
 	ActionTogglePlay
+	ActionToggleHelp
 )
 
 type KeyMap struct {
-	CtrlC key.Binding
-	Enter key.Binding
-	Space key.Binding
+	CtrlC  key.Binding
+	Enter  key.Binding
+	Space  key.Binding
+	Help   key.Binding
+	Scroll key.Binding
 }
 
 var DefaultKeyMap = KeyMap{
 	CtrlC: key.NewBinding(
 		key.WithKeys("ctrl+c"),
+		key.WithHelp("ctrl+c", "quit"),
 	),
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
+		key.WithHelp("enter", "step"),
 	),
 	Space: key.NewBinding(
 		key.WithKeys("space"),
+		key.WithHelp("space", "play/pause"),
 	),
+	Help: key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "toggle help"),
+	),
+	Scroll: key.NewBinding(
+		key.WithKeys("up", "down", "pgup", "pgdown"),
+		key.WithHelp("↑/↓/pgup/pgdn", "scroll memory"),
+	),
+}
+
+func (kMap KeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{kMap.Space, kMap.Enter, kMap.Help, kMap.CtrlC}
+}
+
+func (kMap KeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{kMap.Space, kMap.Enter},
+		{kMap.Scroll},
+		{kMap.Help, kMap.CtrlC},
+	}
 }
 
 func (kMap KeyMap) Action(msg tea.KeyPressMsg) Action {
@@ -40,6 +66,8 @@ func (kMap KeyMap) Action(msg tea.KeyPressMsg) Action {
 		return ActionStep
 	case key.Matches(msg, kMap.Space):
 		return ActionTogglePlay
+	case key.Matches(msg, kMap.Help):
+		return ActionToggleHelp
 	}
 
 	return ActionNone

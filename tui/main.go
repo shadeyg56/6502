@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 
 	"650tea/components"
@@ -22,6 +23,7 @@ type model struct {
 	height            int
 	emulatorIsPlaying bool
 	memoryView        components.MemoryViewModel
+	help              help.Model
 }
 
 type tickMsg time.Time
@@ -31,6 +33,7 @@ func initialModel() model {
 		snapshots:         &atomic.Pointer[CPUSnapshot]{},
 		emu_cmd_channel:   make(chan EmuCMD),
 		emulatorIsPlaying: false,
+		help:              help.New(),
 	}
 }
 
@@ -63,6 +66,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.emulatorIsPlaying = true
 			cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, PlayEmulator{}))
+		case ActionToggleHelp:
+			// The help section grows and shrinks, so the tiles below it have
+			// to be resized whenever it is toggled.
+			m.help.ShowAll = !m.help.ShowAll
+			resized, cmd := m.resizeMemoryView()
+			m = resized
+			cmds = append(cmds, cmd)
 		}
 		updated, cmd := m.memoryView.Update(msg)
 		cmds = append(cmds, cmd)
@@ -77,13 +87,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.help.SetWidth(msg.Width)
 
-		memWidth, memHeight := m.memoryTileInner()
-		updated, cmd := m.memoryView.Update(tea.WindowSizeMsg{
-			Width:  memWidth,
-			Height: memHeight,
-		})
-		m.memoryView = updated.(components.MemoryViewModel)
+		resized, cmd := m.resizeMemoryView()
+		m = resized
 		rangeCMD := sendEmuCmd(m.emu_cmd_channel, SetMemoryRange{uint16(m.memoryView.TotalBytes())})
 		cmds = append(cmds, cmd, rangeCMD)
 
@@ -127,13 +134,34 @@ func (m model) cpuStatusBody() string {
 	)
 }
 
+func (m model) helpView() string {
+	return m.help.View(DefaultKeyMap)
+}
+
+// contentHeight is the space left for the tiles once the help section at the
+// bottom has taken its share.
+func (m model) contentHeight() int {
+	return max(m.height-heightOf(m.helpView()), 1)
+}
+
 func (m model) memoryTileSize() (int, int) {
-	return m.width - (m.width / 4), m.height
+	return m.width - (m.width / 4), m.contentHeight()
 }
 
 func (m model) memoryTileInner() (int, int) {
 	width, height := m.memoryTileSize()
 	return max(width-tileHorizontalChrome, 1), max(height-tileVerticalChrome, 1)
+}
+
+func (m model) resizeMemoryView() (model, tea.Cmd) {
+	memWidth, memHeight := m.memoryTileInner()
+	updated, cmd := m.memoryView.Update(tea.WindowSizeMsg{
+		Width:  memWidth,
+		Height: memHeight,
+	})
+	m.memoryView = updated.(components.MemoryViewModel)
+
+	return m, cmd
 }
 
 func (m model) View() tea.View {
@@ -148,10 +176,10 @@ func (m model) View() tea.View {
 	leftWidth := m.width / 4
 	rightWidth, rightHeight := m.memoryTileSize()
 
-	cpuTile := tile(leftWidth, m.height/2, "CPU Status", m.cpuStatusBody())
+	cpuTile := tile(leftWidth, rightHeight/2, "CPU Status", m.cpuStatusBody())
 	memTile := tile(rightWidth, rightHeight, "Memory", m.memoryView.View().Content)
 
-	view.Content = joinTiles(cpuTile, memTile)
+	view.Content = stackSections(joinTiles(cpuTile, memTile), m.helpView())
 	return view
 }
 
