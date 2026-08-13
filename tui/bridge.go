@@ -30,7 +30,7 @@ type CPUSnapshot struct {
 	flags uint8
 }
 
-func (snapshot *CPUSnapshot) Fill(handle CPUHandle) {
+func (snapshot *CPUSnapshot) Fill(handle CPUHandle, startAddress uint16) {
 
 	cpu := handle.cpu
 	snapshot.pc = uint16(cpu.pc)
@@ -40,11 +40,11 @@ func (snapshot *CPUSnapshot) Fill(handle CPUHandle) {
 	snapshot.Y = uint8(cpu.Y)
 	snapshot.flags = uint8(cpu.flags)
 
-	snapshot.ReadMemory(handle)
+	snapshot.ReadMemory(handle, startAddress)
 
 }
 
-func (snapshot CPUSnapshot) ReadMemory(handle CPUHandle) {
+func (snapshot CPUSnapshot) ReadMemory(handle CPUHandle, startAddress uint16) {
 
 	if snapshot.mem == nil {
 		return
@@ -53,11 +53,17 @@ func (snapshot CPUSnapshot) ReadMemory(handle CPUHandle) {
 	slicePtr := unsafe.SliceData(snapshot.mem)
 	memLen := C.uint16_t(len(snapshot.mem))
 
-	C.mem_read_range(handle.cpu.mem, 0, memLen, (*C.uchar)(unsafe.Pointer(slicePtr)))
+	C.mem_read_range(handle.cpu.mem, C.uint16_t(startAddress), memLen, (*C.uchar)(unsafe.Pointer(slicePtr)))
 }
 
 func NewSnapshot(memLength uint16) CPUSnapshot {
 	snapshot := CPUSnapshot{nil, 0, 0, 0, 0, 0, 0}
+	snapshot.mem = make([]uint8, memLength)
+
+	return snapshot
+}
+
+func (snapshot CPUSnapshot) Clone(memLength uint16) CPUSnapshot {
 	snapshot.mem = make([]uint8, memLength)
 
 	return snapshot

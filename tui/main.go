@@ -8,7 +8,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+
+	"650tea/components"
 )
 
 const RefreshInterval = 16 * time.Millisecond
@@ -20,6 +21,7 @@ type model struct {
 	width             int
 	height            int
 	emulatorIsPlaying bool
+	memoryView        components.MemoryViewModel
 }
 
 type tickMsg time.Time
@@ -44,33 +46,53 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch DefaultKeyMap.Action(msg) {
 		case ActionQuit:
 			return m, tea.Quit
 		case ActionStep:
-			return m, sendEmuCmd(m.emu_cmd_channel, StepEmulator{1})
+			cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, StepEmulator{1}))
 		case ActionTogglePlay:
 			if m.emulatorIsPlaying {
 				m.emulatorIsPlaying = false
-				return m, sendEmuCmd(m.emu_cmd_channel, StopEmulator{})
+				cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, StopEmulator{}))
+				break
 			}
 			m.emulatorIsPlaying = true
-			return m, sendEmuCmd(m.emu_cmd_channel, PlayEmulator{})
+			cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, PlayEmulator{}))
 		}
+		updated, cmd := m.memoryView.Update(msg)
+		cmds = append(cmds, cmd)
+		m.memoryView = updated.(components.MemoryViewModel)
 	case tickMsg:
 		if latest := m.snapshots.Load(); latest != nil {
 			m.snapshot = *latest
+			m.memoryView.SetData(m.snapshot.mem)
 		}
 		return m, tick()
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		memWidth, memHeight := m.memoryTileInner()
+		updated, cmd := m.memoryView.Update(tea.WindowSizeMsg{
+			Width:  memWidth,
+			Height: memHeight,
+		})
+		m.memoryView = updated.(components.MemoryViewModel)
+		rangeCMD := sendEmuCmd(m.emu_cmd_channel, SetMemoryRange{uint16(m.memoryView.TotalBytes())})
+		cmds = append(cmds, cmd, rangeCMD)
+
+	case components.UpdateStartAddrMsg:
+		log.Println("Start address changed", msg.NewAddr)
+		cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, SetMemoryAddr{msg.NewAddr}))
 	}
 
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 func flagString(flags uint8) string {
@@ -105,27 +127,13 @@ func (m model) cpuStatusBody() string {
 	)
 }
 
-func (m model) memoryViewBody(lines int) string {
-	if m.snapshot.mem == nil {
-		return "waiting for first snapshot..."
-	}
+func (m model) memoryTileSize() (int, int) {
+	return m.width - (m.width / 4), m.height
+}
 
-	s := m.snapshot
-	byte_lines := make([]string, lines)
-	header_line := "     "
-	for i := range 16 {
-		header_line += fmt.Sprintf("  %02X ", i)
-	}
-
-	for i := range lines {
-		byte_lines[i] += fmt.Sprintf("%04X ", i*16)
-		for j := range 16 {
-			byte_lines[i] += fmt.Sprintf("  %02X ", s.mem[(i*16)+j])
-		}
-
-	}
-
-	return lipgloss.JoinVertical(lipgloss.Top, append([]string{header_line}, byte_lines...)...)
+func (m model) memoryTileInner() (int, int) {
+	width, height := m.memoryTileSize()
+	return max(width-tileHorizontalChrome, 1), max(height-tileVerticalChrome, 1)
 }
 
 func (m model) View() tea.View {
@@ -138,10 +146,10 @@ func (m model) View() tea.View {
 	}
 
 	leftWidth := m.width / 4
-	rightWidth := m.width - leftWidth
+	rightWidth, rightHeight := m.memoryTileSize()
 
 	cpuTile := tile(leftWidth, m.height/2, "CPU Status", m.cpuStatusBody())
-	memTile := tile(rightWidth, m.height, "Memory", m.memoryViewBody(5))
+	memTile := tile(rightWidth, rightHeight, "Memory", m.memoryView.View().Content)
 
 	view.Content = joinTiles(cpuTile, memTile)
 	return view

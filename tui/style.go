@@ -13,6 +13,11 @@ var (
 			Foreground(lipgloss.Color("63"))
 )
 
+const (
+	tileHorizontalChrome = 4
+	tileVerticalChrome   = 4
+)
+
 func tile(outerWidth, outerHeight int, title, body string) string {
 	width := max(outerWidth, 4)
 	height := max(outerHeight, 3)
