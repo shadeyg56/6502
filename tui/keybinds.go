@@ -13,6 +13,7 @@ const (
 	ActionStep
 	ActionTogglePlay
 	ActionToggleHelp
+	ActionSelectProgram
 )
 
 type KeyMap struct {
@@ -21,6 +22,7 @@ type KeyMap struct {
 	Space  key.Binding
 	Help   key.Binding
 	Scroll key.Binding
+	CtrlO  key.Binding
 }
 
 var DefaultKeyMap = KeyMap{
@@ -44,10 +46,14 @@ var DefaultKeyMap = KeyMap{
 		key.WithKeys("up", "down", "pgup", "pgdown"),
 		key.WithHelp("↑/↓/pgup/pgdn", "scroll memory"),
 	),
+	CtrlO: key.NewBinding(
+		key.WithKeys("ctrl+o"),
+		key.WithHelp("ctrl+o", "load program"),
+	),
 }
 
 func (kMap KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{kMap.Space, kMap.Enter, kMap.Help, kMap.CtrlC}
+	return []key.Binding{kMap.Space, kMap.Enter, kMap.CtrlO, kMap.Help, kMap.CtrlC}
 }
 
 func (kMap KeyMap) FullHelp() [][]key.Binding {
@@ -68,6 +74,8 @@ func (kMap KeyMap) Action(msg tea.KeyPressMsg) Action {
 		return ActionTogglePlay
 	case key.Matches(msg, kMap.Help):
 		return ActionToggleHelp
+	case key.Matches(msg, kMap.CtrlO):
+		return ActionSelectProgram
 	}
 
 	return ActionNone

@@ -36,6 +36,16 @@ type SetMemoryAddr struct {
 
 func (SetMemoryAddr) isCommand() {}
 
+type LoadProgram struct {
+	path string
+}
+
+func (LoadProgram) isCommand() {}
+
+type ResetCPU struct{}
+
+func (ResetCPU) isCommand() {}
+
 /*
 Dunno if its an anti pattern for bubble tea for goroutine to maintain this state or not
 I think its ok since its seperate from model state (we aren't directly touching any model state in emulator goroutines)
@@ -81,9 +91,7 @@ func EmulatorHandler(snapshot_pointer *atomic.Pointer[CPUSnapshot], emu_chan cha
 			go runEmulator(emuState.ctx, cpuHandle, snapshot_pointer, 0, &emuState.memoryRange, &emuState.memoryAddress)
 			emuState.isPlaying = true
 		case StopEmulator:
-			emuState.cancel()
-			emuState.ctx, emuState.cancel = context.WithCancel(context.Background())
-			emuState.isPlaying = false
+			stopEmulator(&emuState)
 			defer emuState.cancel()
 		case SetMemoryRange:
 			emuState.memoryRange = c.memoryRange
@@ -98,10 +106,24 @@ func EmulatorHandler(snapshot_pointer *atomic.Pointer[CPUSnapshot], emu_chan cha
 			}
 		case SetMemoryAddr:
 			emuState.memoryAddress = c.address
+		case LoadProgram:
+			stopEmulator(&emuState)
+			cpuHandle.LoadProgram(c.path)
+			cpuHandle.Reset()
+			snapshot := NewSnapshot(emuState.memoryRange)
+			snapshot.Fill(cpuHandle, cpuHandle.PC())
+			snapshot_pointer.Store(&snapshot)
 		}
+
 	}
 
 	//time.Sleep(10 * time.Millisecond)
+}
+
+func stopEmulator(emuState *EmuState) {
+	emuState.cancel()
+	emuState.ctx, emuState.cancel = context.WithCancel(context.Background())
+	emuState.isPlaying = false
 }
 
 /*

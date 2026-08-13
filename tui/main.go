@@ -7,7 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"650tea/components"
@@ -24,16 +26,28 @@ type model struct {
 	emulatorIsPlaying bool
 	memoryView        components.MemoryViewModel
 	help              help.Model
+	programPath       string
+	programPathEntry  textinput.Model
+	filePicker        filepicker.Model
+	selectingFile     bool
 }
 
 type tickMsg time.Time
 
 func initialModel() model {
+
+	fp := filepicker.New()
+	fp.AllowedTypes = []string{".bin"}
+	cwd, err := os.Getwd()
+	if err == nil {
+		fp.CurrentDirectory = cwd
+	}
 	return model{
 		snapshots:         &atomic.Pointer[CPUSnapshot]{},
 		emu_cmd_channel:   make(chan EmuCMD),
 		emulatorIsPlaying: false,
 		help:              help.New(),
+		filePicker:        fp,
 	}
 }
 
@@ -44,7 +58,7 @@ func tick() tea.Cmd {
 }
 
 func (m model) Init() tea.Cmd {
-	return tick()
+	return tea.Batch(tick(), m.filePicker.Init())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -53,6 +67,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+
+		// While the picker is open it owns the keyboard, apart from quit.
+		if m.selectingFile {
+			if DefaultKeyMap.Action(msg) == ActionQuit {
+				return m, tea.Quit
+			}
+			break
+		}
+
 		switch DefaultKeyMap.Action(msg) {
 		case ActionQuit:
 			return m, tea.Quit
@@ -73,6 +96,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			resized, cmd := m.resizeMemoryView()
 			m = resized
 			cmds = append(cmds, cmd)
+		case ActionSelectProgram:
+			m.selectingFile = true
 		}
 		updated, cmd := m.memoryView.Update(msg)
 		cmds = append(cmds, cmd)
@@ -97,6 +122,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.UpdateStartAddrMsg:
 		log.Println("Start address changed", msg.NewAddr)
 		cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, SetMemoryAddr{msg.NewAddr}))
+	}
+
+	_, isKeyPress := msg.(tea.KeyPressMsg)
+	if m.selectingFile || !isKeyPress {
+		var filePickerCmd tea.Cmd
+		m.filePicker, filePickerCmd = m.filePicker.Update(msg)
+		cmds = append(cmds, filePickerCmd)
+
+		if didSelect, path := m.filePicker.DidSelectFile(msg); didSelect {
+			m.programPath = path
+			m.selectingFile = false
+			cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, LoadProgram{path}))
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -145,7 +183,23 @@ func (m model) contentHeight() int {
 }
 
 func (m model) memoryTileSize() (int, int) {
-	return m.width - (m.width / 4), m.contentHeight()
+	return m.width - (m.width / 4), max(m.contentHeight()-programTileHeight, 3)
+}
+
+func (m model) programTileSize() (int, int) {
+	width, _ := m.memoryTileSize()
+	return width, programTileHeight
+}
+
+func (m model) programBody() string {
+	width, _ := m.programTileSize()
+	inner := max(width-tileHorizontalChrome, 1)
+
+	if m.programPath == "" {
+		return renderPlaceholder("no program loaded — ctrl+o to browse")
+	}
+
+	return renderPath(m.programPath, inner)
 }
 
 func (m model) memoryTileInner() (int, int) {
@@ -173,13 +227,20 @@ func (m model) View() tea.View {
 		return view
 	}
 
+	if m.selectingFile {
+		view.Content = m.filePicker.View()
+		return view
+	}
+
 	leftWidth := m.width / 4
 	rightWidth, rightHeight := m.memoryTileSize()
 
 	cpuTile := tile(leftWidth, rightHeight/2, "CPU Status", m.cpuStatusBody())
 	memTile := tile(rightWidth, rightHeight, "Memory", m.memoryView.View().Content)
+	_, programHeight := m.programTileSize()
+	programTile := tile(rightWidth, programHeight, "Program", m.programBody())
 
-	view.Content = stackSections(joinTiles(cpuTile, memTile), m.helpView())
+	view.Content = stackSections(joinTiles(cpuTile, stackSections(memTile, programTile)), m.helpView())
 	return view
 }
 
