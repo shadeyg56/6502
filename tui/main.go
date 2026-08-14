@@ -40,6 +40,7 @@ func initialModel(initialProgram string) model {
 
 	fp := filepicker.New()
 	fp.AllowedTypes = []string{".bin"}
+	styleFilePicker(&fp.Styles)
 	cwd, err := os.Getwd()
 	if err == nil {
 		fp.CurrentDirectory = cwd
@@ -47,11 +48,15 @@ func initialModel(initialProgram string) model {
 	if initialProgram != "" {
 		initialProgram, _ = filepath.Abs(initialProgram)
 	}
+
+	helpModel := help.New()
+	styleHelp(&helpModel.Styles)
+
 	return model{
 		snapshots:         &atomic.Pointer[CPUSnapshot]{},
 		emu_cmd_channel:   make(chan EmuCMD),
 		emulatorIsPlaying: false,
-		help:              help.New(),
+		help:              helpModel,
 		filePicker:        fp,
 		programPath:       initialProgram,
 		stackView:         components.New(),
@@ -161,35 +166,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func flagString(flags uint8) string {
-	const names = "NV-BDIZC"
-
-	out := make([]byte, len(names))
-	for i := range names {
-		if flags&(uint8(1)<<(7-i)) != 0 {
-			out[i] = names[i]
-		} else {
-			out[i] = '.'
-		}
-	}
-
-	return string(out)
-}
-
 func (m model) cpuStatusBody() string {
 	if m.snapshot.mem == nil {
-		return "waiting for first snapshot..."
+		return renderPlaceholder("waiting for first snapshot...")
 	}
 
 	s := m.snapshot
-	return fmt.Sprintf(
-		"PC  $%04X\n"+
-			"SP  $%02X\n"+
-			"A   $%02X\n"+
-			"X   $%02X\n"+
-			"Y   $%02X\n"+
-			"P   $%02X  %s",
-		s.pc, s.sp, s.accum, s.X, s.Y, s.flags, flagString(s.flags),
+	return stackStrings(
+		renderRegister("PC", fmt.Sprintf("$%04X", s.pc)),
+		renderRegister("SP", fmt.Sprintf("$%02X", s.sp)),
+		renderRegister("A ", fmt.Sprintf("$%02X", s.accum)),
+		renderRegister("X ", fmt.Sprintf("$%02X", s.X)),
+		renderRegister("Y ", fmt.Sprintf("$%02X", s.Y)),
+		renderRegister("P ", fmt.Sprintf("$%02X", s.flags))+"  "+renderFlags(s.flags),
+		"",
+		renderRunState(m.emulatorIsPlaying),
 	)
 }
 
@@ -224,13 +215,17 @@ func (m model) programBody(width int, _ int) string {
 
 func (m model) layout() Tile {
 	return joinTiles(1, 1,
-		NewTile(cpuTileKey, "CPU Status", StaticBody(m.cpuStatusBody()), cpuWidthWeight, 1),
+		NewTile(cpuTileKey, "CPU Status", StaticBody(m.cpuStatusBody()), cpuWidthWeight, 1).
+			WithAccent(accentCPU),
 		stackSections(memoryWidthWeight, 1,
-			NewTile(memoryTileKey, "Memory", StaticBody(m.memoryView.View().Content), 1, 1),
+			NewTile(memoryTileKey, "Memory", StaticBody(m.memoryView.View().Content), 1, 1).
+				WithAccent(accentMemory),
 			NewTile(programTileKey, "Program", m.programBody, 1, 0).
+				WithAccent(accentProgram).
 				WithFixedHeight(programTileHeight),
 		),
-		NewTile(stackTileKey, "Stack", StaticBody(m.stackView.View().Content), stackWidthWeight, 1),
+		NewTile(stackTileKey, "Stack", StaticBody(m.stackView.View().Content), stackWidthWeight, 1).
+			WithAccent(accentStack),
 	)
 }
 

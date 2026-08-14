@@ -2,7 +2,6 @@ package components
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"charm.land/bubbles/v2/viewport"
@@ -82,11 +81,11 @@ func (m StackViewModel) DataToString() string {
 	data := m.data
 	builder := strings.Builder{}
 	for i := range len(data) {
-		log.Println(i)
-		line := fmt.Sprintf("$%02x\t%02x", i, data[i])
-		builder.WriteString(line)
+		builder.WriteString(stackAddrStyle.Render(fmt.Sprintf("$%02X", i)))
+		builder.WriteString("  ")
+		builder.WriteString(renderByte(data[i]))
 		if m.sp == uint8(i) {
-			builder.WriteString("  <-----")
+			builder.WriteString(pointerStyle.Render("  <- SP"))
 		}
 		builder.WriteString("\n")
 	}

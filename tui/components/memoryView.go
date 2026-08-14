@@ -166,7 +166,7 @@ func (m MemoryViewModel) HeaderString() string {
 		header += fmt.Sprintf("  %02X ", i)
 	}
 
-	return header
+	return columnHeaderStyle.Render(header)
 }
 
 func (m MemoryViewModel) DataToString() string {
@@ -182,13 +182,13 @@ func (m MemoryViewModel) DataToString() string {
 			break
 		}
 
-		line := fmt.Sprintf("%04X ", m.startAddr+offset)
+		line := addrStyle.Render(fmt.Sprintf("%04X", m.startAddr+offset)) + " "
 		for j := range m.bytesPerLine {
 			addr := offset + j
 			if addr >= len(m.data) {
 				break
 			}
-			line += fmt.Sprintf("  %02X ", m.data[addr])
+			line += "  " + renderByte(m.data[addr]) + " "
 		}
 
 		byte_lines = append(byte_lines, line)

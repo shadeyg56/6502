@@ -23,6 +23,7 @@ type Tile struct {
 	body         func(width, height int) string
 	direction    Direction
 	children     []Tile
+	accent       string
 	widthWeight  int
 	heightWeight int
 	fixedWidth   int
@@ -63,6 +64,11 @@ func stackSections(widthWeight int, heightWeight int, tiles ...Tile) Tile {
 		widthWeight:  widthWeight,
 		heightWeight: heightWeight,
 	}
+}
+
+func (t Tile) WithAccent(accent string) Tile {
+	t.accent = accent
+	return t
 }
 
 func (t Tile) WithFixedWidth(width int) Tile {
@@ -113,14 +119,19 @@ func RenderTile(tile Tile, width int, height int) string {
 	outerWidth, outerHeight := outerSize(width, height)
 	innerWidth, innerHeight := innerSize(width, height)
 
-	content := titleStyle.Render(tile.title)
+	accent := tile.accent
+	if accent == "" {
+		accent = accentDefault
+	}
+
+	content := titleStyleFor(accent).Render(tile.title)
 	if tile.body != nil {
 		if body := tile.body(innerWidth, innerHeight); body != "" {
 			content += "\n\n" + body
 		}
 	}
 
-	return tileStyle.Width(outerWidth).Height(outerHeight).Render(content)
+	return tileStyleFor(accent).Width(outerWidth).Height(outerHeight).Render(content)
 }
 
 // MeasureTiles walks the same tree RenderTile does and reports the body size
