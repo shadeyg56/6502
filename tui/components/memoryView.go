@@ -60,6 +60,7 @@ func (m MemoryViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				viewport.WithWidth(msg.Width),
 				viewport.WithHeight(m.visibleLines),
 			)
+			RemoveShortcut(&m.viewport.KeyMap.PageDown, "space")
 			m.viewReady = true
 		} else {
 			m.viewport.SetWidth(msg.Width)
