@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -18,6 +19,7 @@ const (
 
 type MemoryViewModel struct {
 	viewport     viewport.Model
+	pc           uint16
 	data         []uint8
 	viewReady    bool
 	lineCount    int
@@ -38,6 +40,12 @@ func bytesPerLineFor(width int) int {
 
 func lineCountFor(height int) int {
 	return max(height-headerLineCount, 1)
+}
+
+func NewMemoryView() MemoryViewModel {
+	return MemoryViewModel{
+		data: make([]uint8, (1<<16)-1),
+	}
 }
 
 func (m MemoryViewModel) Init() tea.Cmd {
@@ -77,7 +85,7 @@ func (m MemoryViewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if delta := m.viewport.YOffset() - yOffset; delta != 0 {
 		previous := m.startAddr
-		m.scrollLines(delta)
+		//m.scrollLines(delta)
 
 		if m.startAddr != previous {
 			addr := uint16(m.startAddr)
@@ -131,8 +139,9 @@ func (m MemoryViewModel) GetFirstBufferedAddress() uint16 {
 	return uint16(m.startAddr)
 }
 
-func (m *MemoryViewModel) SetData(data []uint8) {
-	m.data = data
+func (m *MemoryViewModel) SetData(data []uint8, pc uint16) {
+	copy(m.data[m.startAddr:], data)
+	m.pc = pc
 	if m.viewReady {
 		m.viewport.SetContent(m.DataToString())
 	}
@@ -174,25 +183,47 @@ func (m MemoryViewModel) DataToString() string {
 		return ""
 	}
 
-	byte_lines := make([]string, 0, m.lineCount)
+	builder := strings.Builder{}
 
-	for i := range m.lineCount {
+	// Styling costs microseconds per cell, so only the lines currently on
+	// screen get styled. Everything else is written as plain hex, which the
+	// viewport is holding but not showing. A scroll re-renders on the next
+	// snapshot, so the newly exposed lines pick up their colours immediately.
+	firstVisibleLine := m.viewport.YOffset()
+	lastVisibleLine := firstVisibleLine + m.visibleLines
+
+	for i := range len(m.data) / m.bytesPerLine {
 		offset := i * m.bytesPerLine
-		if offset >= len(m.data) {
-			break
-		}
+		visible := i >= firstVisibleLine && i < lastVisibleLine
 
-		line := addrStyle.Render(fmt.Sprintf("%04X", m.startAddr+offset)) + " "
+		if visible {
+			builder.WriteString(addrStyle.Render(hexWord(m.startAddr + offset)))
+		} else {
+			builder.WriteString(hexWord(m.startAddr + offset))
+		}
+		builder.WriteByte(' ')
+
 		for j := range m.bytesPerLine {
 			addr := offset + j
 			if addr >= len(m.data) {
 				break
 			}
-			line += "  " + renderByte(m.data[addr]) + " "
+
+			builder.WriteString("  ")
+			switch {
+			case !visible:
+				builder.WriteString(hexByte(m.data[addr]))
+			case uint16(addr) == m.pc:
+				builder.WriteString(renderCurrentByte(m.data[addr]))
+			default:
+				builder.WriteString(renderByte(m.data[addr]))
+			}
+			builder.WriteByte(' ')
 		}
 
-		byte_lines = append(byte_lines, line)
+		builder.WriteByte('\n')
+
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Top, byte_lines...)
+	return builder.String()
 }

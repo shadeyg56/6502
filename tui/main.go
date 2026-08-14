@@ -59,6 +59,7 @@ func initialModel(initialProgram string) model {
 		help:              helpModel,
 		filePicker:        fp,
 		programPath:       initialProgram,
+		memoryView:        components.NewMemoryView(),
 		stackView:         components.New(),
 	}
 }
@@ -124,7 +125,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if latest := m.snapshots.Load(); latest != nil {
 			m.snapshot = *latest
-			m.memoryView.SetData(m.snapshot.mem)
+			m.memoryView.SetData(m.snapshot.mem, m.snapshot.pc)
 			m.stackView.SetData(m.snapshot.stack, m.snapshot.sp)
 		}
 		return m, tick()

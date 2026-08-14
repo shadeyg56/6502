@@ -22,6 +22,8 @@ var (
 			Foreground(lipgloss.Color("42")).
 			Bold(true)
 
+	currentByteStyle = stackAddrStyle
+
 	pointerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("212")).
 			Bold(true)
@@ -31,15 +33,47 @@ var (
 				Italic(true)
 )
 
-func renderByte(value uint8) string {
-	if value == 0 {
-		return zeroByteStyle.Render("00")
-	}
+// Styling a byte costs microseconds and a redraw touches thousands of them, so
+// every possible result is built once up front and looked up by value.
+var (
+	byteCache        [256]string
+	currentByteCache [256]string
+)
 
-	return byteStyle.Render(lipgloss.NewStyle().Render(hexByte(value)))
+func init() {
+	for value := range 256 {
+		text := hexByte(uint8(value))
+
+		if value == 0 {
+			byteCache[value] = zeroByteStyle.Render(text)
+		} else {
+			byteCache[value] = byteStyle.Render(text)
+		}
+
+		currentByteCache[value] = currentByteStyle.Render(text)
+	}
+}
+
+func renderByte(value uint8) string {
+	return byteCache[value]
+}
+
+// Render byte pointed to by program counter
+func renderCurrentByte(value uint8) string {
+	return currentByteCache[value]
 }
 
 func hexByte(value uint8) string {
 	const digits = "0123456789ABCDEF"
 	return string([]byte{digits[value>>4], digits[value&0x0F]})
+}
+
+func hexWord(value int) string {
+	const digits = "0123456789ABCDEF"
+	return string([]byte{
+		digits[(value>>12)&0x0F],
+		digits[(value>>8)&0x0F],
+		digits[(value>>4)&0x0F],
+		digits[value&0x0F],
+	})
 }

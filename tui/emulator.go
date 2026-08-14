@@ -83,7 +83,7 @@ func EmulatorHandler(snapshot_pointer *atomic.Pointer[CPUSnapshot], emu_chan cha
 	defer emuState.cancel()
 
 	for cmd := range emu_chan {
-		log.Printf("Got emu cmd: %T\n", cmd)
+		log.Printf("Got emu cmd: %T %s\n", cmd, cmd)
 		switch c := cmd.(type) {
 		case StepEmulator:
 			go runEmulator(emuState.ctx, cpuHandle, snapshot_pointer, c.step, &emuState.memoryRange, &emuState.memoryAddress)
@@ -106,12 +106,21 @@ func EmulatorHandler(snapshot_pointer *atomic.Pointer[CPUSnapshot], emu_chan cha
 			}
 		case SetMemoryAddr:
 			emuState.memoryAddress = c.address
+			if !emuState.isPlaying {
+				snapshot := snapshot_pointer.Load()
+				if snapshot == nil {
+					continue
+				}
+				clonedSnapshot := snapshot.Clone(emuState.memoryRange)
+				ReadMemory(cpuHandle, snapshot.mem, emuState.memoryAddress)
+				snapshot_pointer.Store(&clonedSnapshot)
+			}
 		case LoadProgram:
 			stopEmulator(&emuState)
 			cpuHandle.LoadProgram(c.path)
 			cpuHandle.Reset()
 			snapshot := NewSnapshot(emuState.memoryRange)
-			snapshot.Fill(cpuHandle, cpuHandle.PC())
+			snapshot.Fill(cpuHandle, 0x0)
 			snapshot_pointer.Store(&snapshot)
 		}
 
