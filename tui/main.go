@@ -26,6 +26,7 @@ type model struct {
 	height            int
 	emulatorIsPlaying bool
 	memoryView        components.MemoryViewModel
+	stackView         components.StackViewModel
 	help              help.Model
 	programPath       string
 	programPathEntry  textinput.Model
@@ -53,6 +54,7 @@ func initialModel(initialProgram string) model {
 		help:              help.New(),
 		filePicker:        fp,
 		programPath:       initialProgram,
+		stackView:         components.New(),
 	}
 }
 
@@ -105,7 +107,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The help section grows and shrinks, so the tiles below it have
 			// to be resized whenever it is toggled.
 			m.help.ShowAll = !m.help.ShowAll
-			resized, cmd := m.resizeMemoryView()
+			resized, cmd := m.propagateTileSizes()
 			m = resized
 			cmds = append(cmds, cmd)
 		case ActionSelectProgram:
@@ -118,6 +120,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if latest := m.snapshots.Load(); latest != nil {
 			m.snapshot = *latest
 			m.memoryView.SetData(m.snapshot.mem)
+			m.stackView.SetData(m.snapshot.stack, m.snapshot.sp)
 		}
 		return m, tick()
 
@@ -126,7 +129,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.help.SetWidth(msg.Width)
 
-		resized, cmd := m.resizeMemoryView()
+		resized, cmd := m.propagateTileSizes()
 		m = resized
 		rangeCMD := sendEmuCmd(m.emu_cmd_channel, SetMemoryRange{uint16(m.memoryView.TotalBytes())})
 		cmds = append(cmds, cmd, rangeCMD)
@@ -147,6 +150,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectingFile = false
 			cmds = append(cmds, sendEmuCmd(m.emu_cmd_channel, LoadProgram{path}))
 		}
+	}
+
+	if _, isResize := msg.(tea.WindowSizeMsg); !isResize {
+		updatedStackView, cmd := m.stackView.Update(msg)
+		m.stackView = updatedStackView.(components.StackViewModel)
+		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -198,9 +207,11 @@ const (
 	cpuTileKey     = "cpu"
 	memoryTileKey  = "memory"
 	programTileKey = "program"
+	stackTileKey   = "stack"
 
 	cpuWidthWeight    = 1
 	memoryWidthWeight = 3
+	stackWidthWeight  = 1
 )
 
 func (m model) programBody(width int, _ int) string {
@@ -219,6 +230,7 @@ func (m model) layout() Tile {
 			NewTile(programTileKey, "Program", m.programBody, 1, 0).
 				WithFixedHeight(programTileHeight),
 		),
+		NewTile(stackTileKey, "Stack", StaticBody(m.stackView.View().Content), stackWidthWeight, 1),
 	)
 }
 
@@ -226,15 +238,52 @@ func (m model) tileSizes() map[string]Size {
 	return MeasureTiles(m.layout(), m.width, m.contentHeight())
 }
 
-func (m model) resizeMemoryView() (model, tea.Cmd) {
-	size := m.tileSizes()[memoryTileKey]
-	updated, cmd := m.memoryView.Update(tea.WindowSizeMsg{
-		Width:  size.Width,
-		Height: size.Height,
-	})
-	m.memoryView = updated.(components.MemoryViewModel)
+// sizedComponent ties a tile in the layout to the component that renders into
+// it. Adding a component to the layout means adding one entry here.
+type sizedComponent struct {
+	key    string
+	resize func(m *model, msg tea.Msg) tea.Cmd
+}
 
-	return m, cmd
+var sizedComponents = []sizedComponent{
+	{
+		key: memoryTileKey,
+		resize: func(m *model, msg tea.Msg) tea.Cmd {
+			updated, cmd := m.memoryView.Update(msg)
+			m.memoryView = updated.(components.MemoryViewModel)
+			return cmd
+		},
+	},
+	{
+		key: stackTileKey,
+		resize: func(m *model, msg tea.Msg) tea.Cmd {
+			updated, cmd := m.stackView.Update(msg)
+			m.stackView = updated.(components.StackViewModel)
+			return cmd
+		},
+	},
+}
+
+// propagateTileSizes measures the layout once and tells every component how
+// much room its tile was given, so components size themselves to what will
+// actually be drawn rather than to the terminal.
+func (m model) propagateTileSizes() (model, tea.Cmd) {
+	sizes := m.tileSizes()
+
+	var cmds []tea.Cmd
+	for _, component := range sizedComponents {
+		size, ok := sizes[component.key]
+		if !ok {
+			continue
+		}
+
+		cmds = append(cmds, component.resize(&m, tea.WindowSizeMsg{
+			Width:  size.Width,
+			Height: size.Height,
+		}))
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m model) View() tea.View {

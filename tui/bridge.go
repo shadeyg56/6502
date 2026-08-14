@@ -22,6 +22,7 @@ type CPUHandle struct {
 
 type CPUSnapshot struct {
 	mem   []uint8
+	stack []uint8
 	pc    uint16
 	sp    uint8
 	accum uint8
@@ -40,25 +41,27 @@ func (snapshot *CPUSnapshot) Fill(handle CPUHandle, startAddress uint16) {
 	snapshot.Y = uint8(cpu.Y)
 	snapshot.flags = uint8(cpu.flags)
 
-	snapshot.ReadMemory(handle, startAddress)
+	ReadMemory(handle, snapshot.mem, startAddress)
+	ReadMemory(handle, snapshot.stack, 0x100)
 
 }
 
-func (snapshot CPUSnapshot) ReadMemory(handle CPUHandle, startAddress uint16) {
+func ReadMemory(handle CPUHandle, buf []uint8, startAddress uint16) {
 
-	if snapshot.mem == nil {
+	if buf == nil {
 		return
 	}
 
-	slicePtr := unsafe.SliceData(snapshot.mem)
-	memLen := C.uint16_t(len(snapshot.mem))
+	slicePtr := unsafe.SliceData(buf)
+	memLen := C.uint16_t(len(buf))
 
 	C.mem_read_range(handle.cpu.mem, C.uint16_t(startAddress), memLen, (*C.uchar)(unsafe.Pointer(slicePtr)))
 }
 
 func NewSnapshot(memLength uint16) CPUSnapshot {
-	snapshot := CPUSnapshot{nil, 0, 0, 0, 0, 0, 0}
+	snapshot := CPUSnapshot{nil, nil, 0, 0, 0, 0, 0, 0}
 	snapshot.mem = make([]uint8, memLength)
+	snapshot.stack = make([]uint8, 0x100)
 
 	return snapshot
 }

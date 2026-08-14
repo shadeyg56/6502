@@ -101,7 +101,7 @@ func EmulatorHandler(snapshot_pointer *atomic.Pointer[CPUSnapshot], emu_chan cha
 					continue
 				}
 				clonedSnapshot := snapshot.Clone(emuState.memoryRange)
-				clonedSnapshot.ReadMemory(cpuHandle, emuState.memoryAddress)
+				ReadMemory(cpuHandle, snapshot.mem, emuState.memoryAddress)
 				snapshot_pointer.Store(&clonedSnapshot)
 			}
 		case SetMemoryAddr:
