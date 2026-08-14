@@ -35,30 +35,6 @@ const (
 	programTileHeight    = 5
 )
 
-func tile(outerWidth, outerHeight int, title, body string) string {
-	width := max(outerWidth, 4)
-	height := max(outerHeight, 3)
-
-	content := titleStyle.Render(title)
-	if body != "" {
-		content += "\n\n" + body
-	}
-
-	return tileStyle.Width(width).Height(height).Render(content)
-}
-
-func joinTiles(tiles ...string) string {
-	return lipgloss.JoinHorizontal(lipgloss.Top, tiles...)
-}
-
-func stackSections(sections ...string) string {
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
-}
-
-func heightOf(s string) int {
-	return lipgloss.Height(s)
-}
-
 func truncateLeft(s string, width int) string {
 	if width <= 0 {
 		return ""

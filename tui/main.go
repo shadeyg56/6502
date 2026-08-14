@@ -194,36 +194,43 @@ func (m model) contentHeight() int {
 	return max(m.height-heightOf(m.helpView()), 1)
 }
 
-func (m model) memoryTileSize() (int, int) {
-	return m.width - (m.width / 4), max(m.contentHeight()-programTileHeight, 3)
-}
+const (
+	cpuTileKey     = "cpu"
+	memoryTileKey  = "memory"
+	programTileKey = "program"
 
-func (m model) programTileSize() (int, int) {
-	width, _ := m.memoryTileSize()
-	return width, programTileHeight
-}
+	cpuWidthWeight    = 1
+	memoryWidthWeight = 3
+)
 
-func (m model) programBody() string {
-	width, _ := m.programTileSize()
-	inner := max(width-tileHorizontalChrome, 1)
-
+func (m model) programBody(width int, _ int) string {
 	if m.programPath == "" {
 		return renderPlaceholder("no program loaded — ctrl+o to browse")
 	}
 
-	return renderPath(m.programPath, inner)
+	return renderPath(m.programPath, width)
 }
 
-func (m model) memoryTileInner() (int, int) {
-	width, height := m.memoryTileSize()
-	return max(width-tileHorizontalChrome, 1), max(height-tileVerticalChrome, 1)
+func (m model) layout() Tile {
+	return joinTiles(1, 1,
+		NewTile(cpuTileKey, "CPU Status", StaticBody(m.cpuStatusBody()), cpuWidthWeight, 1),
+		stackSections(memoryWidthWeight, 1,
+			NewTile(memoryTileKey, "Memory", StaticBody(m.memoryView.View().Content), 1, 1),
+			NewTile(programTileKey, "Program", m.programBody, 1, 0).
+				WithFixedHeight(programTileHeight),
+		),
+	)
+}
+
+func (m model) tileSizes() map[string]Size {
+	return MeasureTiles(m.layout(), m.width, m.contentHeight())
 }
 
 func (m model) resizeMemoryView() (model, tea.Cmd) {
-	memWidth, memHeight := m.memoryTileInner()
+	size := m.tileSizes()[memoryTileKey]
 	updated, cmd := m.memoryView.Update(tea.WindowSizeMsg{
-		Width:  memWidth,
-		Height: memHeight,
+		Width:  size.Width,
+		Height: size.Height,
 	})
 	m.memoryView = updated.(components.MemoryViewModel)
 
@@ -244,15 +251,10 @@ func (m model) View() tea.View {
 		return view
 	}
 
-	leftWidth := m.width / 4
-	rightWidth, rightHeight := m.memoryTileSize()
-
-	cpuTile := tile(leftWidth, rightHeight/2, "CPU Status", m.cpuStatusBody())
-	memTile := tile(rightWidth, rightHeight, "Memory", m.memoryView.View().Content)
-	_, programHeight := m.programTileSize()
-	programTile := tile(rightWidth, programHeight, "Program", m.programBody())
-
-	view.Content = stackSections(joinTiles(cpuTile, stackSections(memTile, programTile)), m.helpView())
+	view.Content = stackStrings(
+		RenderTile(m.layout(), m.width, m.contentHeight()),
+		m.helpView(),
+	)
 	return view
 }
 
